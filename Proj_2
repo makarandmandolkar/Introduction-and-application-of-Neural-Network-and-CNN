@@ -1,0 +1,440 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# One Layer Neural Network"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import matplotlib.pyplot as plt    #libraries inclusion\n",
+    "import numpy as np      \n",
+    "import util_mnist_reader\n",
+    "from sklearn.preprocessing import scale\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.metrics import confusion_matrix"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\n",
+    "def softmax(x):\n",
+    "    a = np.exp(x)/np.sum(np.exp(x), axis=0)\n",
+    "    return(a)\n",
+    "\n",
+    "def sigmoid(z):   #activating sigmoid function for probability distribution\n",
+    "    b = 1.0/(1.0+np.exp(-z))\n",
+    "    return(b)\n",
+    "    \n",
+    "def sigmoid_der(z):\n",
+    "    sig=sigmoid(z)\n",
+    "    der = sig*(1-sig)\n",
+    "    return(der)\n",
+    "    \n",
+    "def cross_entropy_loss(output,y_target):  #cross_entropy_loss function\n",
+    "    cros = -np.sum(np.log(output)*y_target,axis=1)\n",
+    "    return(cross)\n",
+    "    \n",
+    "def encode(y,no_classes):   #Using classification for 10 class\n",
+    "    matrix=np.zeros((len(y),no_classes))\n",
+    "    for i,j in enumerate(y):\n",
+    "        matrix[i,j]=1\n",
+    "    return(matrix)\n",
+    "    \n",
+    "def loss_graph(model):\n",
+    "    plt.plot(model.err)\n",
+    "    plt.title('Training loss')\n",
+    "    plt.ylabel('Loss')\n",
+    "    plt.xlabel('Epochs')\n",
+    "    plt.show()    \n",
+    "\n",
+    "    plt.plot(model.val_err)\n",
+    "    plt.title('Validation loss')\n",
+    "    plt.ylabel('Loss')\n",
+    "    plt.xlabel('Epochs')\n",
+    "    plt.show()    \n",
+    "    \n",
+    "#Accuracy Graphs   \n",
+    "def accuracy_graph(model):\n",
+    "    plt.plot(model.acc)\n",
+    "    plt.title('Training Accuracy')\n",
+    "    plt.ylabel('Accuracy')\n",
+    "    plt.xlabel('Epochs')\n",
+    "    plt.show()    \n",
+    "\n",
+    "    plt.plot(model.val_acc)\n",
+    "    plt.title('Validation Accuracy')\n",
+    "    plt.ylabel('Accuracy')\n",
+    "    plt.xlabel('Epochs')\n",
+    "    plt.show()   \n",
+    "    \n",
+    "#To find out the maximum probability out of all    \n",
+    "def find_max_prob(y,axis=1):\n",
+    "    return(np.argmax(y,axis))\n",
+    "    \n",
+    "def accuracy(confusion_matrix):   #cofusion matrix\n",
+    "    diagonal_sum=confusion_matrix.trace()\n",
+    "    sums=confusion_matrix.sum()\n",
+    "    return(diagonal_sum/sums) "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "class onelayerneuralnetwork:\n",
+    "    def __init__(self,no_features,no_class,no_hidden_units=128,epochs=300,learning_rate=0.001,no_batches=25):\n",
+    "        self.no_features=no_features\n",
+    "        self.no_hidden_units=no_hidden_units\n",
+    "        self.no_class=no_class\n",
+    "        self.w1,self.w2=self.initial_weights()\n",
+    "        self.epochs=epochs\n",
+    "        self.learning_rate=learning_rate\n",
+    "        self.no_batches=no_batches\n",
+    "        \n",
+    "    def initial_weights(self):\n",
+    "        w1=np.random.uniform(-1.0,1.0,size=(self.no_hidden_units,self.no_features))        \n",
+    "        w2=np.random.uniform(-1.0,1.0,size=(self.no_class,self.no_hidden_units))\n",
+    "        return(w1,w2)\n",
+    "        \n",
+    "    def backpropagation(self,x,y):\n",
+    "        y=np.transpose(y)\n",
+    "        input_data,hidden_data,net_hidden,output_data,net_output=self.feed_forward(x)\n",
+    "        dw1,dw2=self.backward(input_data,hidden_data,net_hidden,net_output,y)\n",
+    "        error=self.error(y,net_output)\n",
+    "        return(dw1,dw2,error)\n",
+    "        \n",
+    "    def feed_forward(self,x):\n",
+    "        input_data=x.copy()\n",
+    "        bias_1=np.ones([len(input_data),1])\n",
+    "        input_data=np.hstack([bias_1,input_data])\n",
+    "        hidden_data=self.w1.dot(np.transpose(input_data))\n",
+    "        net_hidden=sigmoid(hidden_data)        \n",
+    "        output_data=self.w2.dot(net_hidden)\n",
+    "        net_output=softmax(output_data)\n",
+    "        return(input_data,hidden_data,net_hidden,output_data,net_output)\n",
+    "        \n",
+    "    def backward(self,input_data,hidden_data,net_hidden,net_output,y):    #Gradient descent algorithm\n",
+    "        delta2=net_output-y\n",
+    "        delta1=np.transpose(self.w2).dot(delta2)*sigmoid_der(hidden_data)\n",
+    "        dw1=delta1.dot(input_data)\n",
+    "        dw2=delta2.dot(np.transpose(net_hidden))\n",
+    "        return(dw1,dw2)      \n",
+    "         \n",
+    "    def error(self,y,output):           #Calculating Loss\n",
+    "        error=cross_entropy_loss(output, y)\n",
+    "        return(np.mean(error))\n",
+    "                \n",
+    "    def fit(self,x,y,x_v,y_v):\n",
+    "        self.acc=[]      #updating usual weights of the layers\n",
+    "        self.val_acc=[]\n",
+    "        self.err=[]\n",
+    "        self.val_err=[]\n",
+    "        x_data,y_data=x.copy(),y.copy()\n",
+    "        y_data_enc=encode(y_data,self.no_class)\n",
+    "        x_valdat,y_valdat=x_v.copy(),y_v.copy()\n",
+    "        y_data_val_enc=encode(y_valdat,self.no_class)\n",
+    "        x_i=np.array_split(x_data,self.no_batches)\n",
+    "        y_i=np.array_split(y_data_enc,self.no_batches)\n",
+    "        x_val_data=np.array_split(x_valdat,self.no_batches)\n",
+    "        y_val_data=np.array_split(y_data_val_enc,self.no_batches)\n",
+    "        \n",
+    "        #Iterations\n",
+    "        for i in range(self.epochs):\n",
+    "            errorss=[]#Train Error\n",
+    "            error_val=[]#Validation Error\n",
+    "            for x_b, y_b in zip(x_i,y_i):\n",
+    "                grad_desc1,grad_desc2,error=self.backpropagation(x_b,y_b)\n",
+    "                errorss.append(error)\n",
+    "                self.w1-=(self.learning_rate*grad_desc1)\n",
+    "                self.w2-=(self.learning_rate*grad_desc2)\n",
+    "            self.err.append(np.mean(errorss))\n",
+    "            for x_c, y_c in zip(x_val_data,y_val_data):\n",
+    "                grad_desc3,grad_desc4,error_2=self.backpropagation(x_c,y_c)\n",
+    "                error_val.append(error_2)\n",
+    "            self.val_err.append(np.mean(error_val))\n",
+    "            #Predict training Output\n",
+    "            y_train_output=self.pred(x)\n",
+    "            y_train_final=find_max_prob(y_train_output)\n",
+    "            c_m1=confusion_matrix(y, y_train_final)\n",
+    "            train_acc=accuracy(c_m1)\n",
+    "            self.acc.append(train_acc)\n",
+    "            #Predict validation Output\n",
+    "            y_valid_output=self.pred(x_v)\n",
+    "            y_valid_final=find_max_prob(y_valid_output)\n",
+    "            c_m3=confusion_matrix(y_v, y_valid_final)\n",
+    "            valid_acc=accuracy(c_m3)\n",
+    "            self.val_acc.append(valid_acc)\n",
+    "            print(\" Epoch : %d ::: Training Loss = %f , Training Accuracy = %f , Validation Loss = %f , Validation Accuracy = %f\" %(i,np.mean(errorss),train_acc,np.mean(error_val),valid_acc))\n",
+    "        return self\n",
+    "    \n",
+    "    #To Predict Outputs\n",
+    "    def pred(self,x):\n",
+    "        x_prob=x.copy()\n",
+    "        input_data,hidden_data,net_hidden,output_data,net_output=self.feed_forward(x_prob)\n",
+    "        return(softmax(np.transpose(net_output)))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "metadata": {},
+   "outputs": [
+    {
+     "ename": "NameError",
+     "evalue": "name 'util_mnist_reader' is not defined",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[1;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[1;31mNameError\u001b[0m                                 Traceback (most recent call last)",
+      "\u001b[1;32m<ipython-input-23-47c04f357857>\u001b[0m in \u001b[0;36m<module>\u001b[1;34m\u001b[0m\n\u001b[0;32m      1\u001b[0m \u001b[1;31m#Training Data and Testing Data\u001b[0m\u001b[1;33m\u001b[0m\u001b[1;33m\u001b[0m\u001b[1;33m\u001b[0m\u001b[0m\n\u001b[1;32m----> 2\u001b[1;33m \u001b[0mX_train\u001b[0m\u001b[1;33m,\u001b[0m\u001b[0my_train\u001b[0m\u001b[1;33m=\u001b[0m\u001b[0mutil_mnist_reader\u001b[0m\u001b[1;33m.\u001b[0m\u001b[0mload_mnist\u001b[0m\u001b[1;33m(\u001b[0m\u001b[1;34m'data/fashion'\u001b[0m\u001b[1;33m,\u001b[0m\u001b[0mkind\u001b[0m\u001b[1;33m=\u001b[0m\u001b[1;34m'train'\u001b[0m\u001b[1;33m)\u001b[0m\u001b[1;33m\u001b[0m\u001b[1;33m\u001b[0m\u001b[0m\n\u001b[0m\u001b[0;32m      3\u001b[0m \u001b[0mX_test\u001b[0m\u001b[1;33m,\u001b[0m\u001b[0my_test\u001b[0m\u001b[1;33m=\u001b[0m\u001b[0mutil_mnist_reader\u001b[0m\u001b[1;33m.\u001b[0m\u001b[0mload_mnist\u001b[0m\u001b[1;33m(\u001b[0m\u001b[1;34m'data/fashion'\u001b[0m\u001b[1;33m,\u001b[0m\u001b[0mkind\u001b[0m\u001b[1;33m=\u001b[0m\u001b[1;34m't10k'\u001b[0m\u001b[1;33m)\u001b[0m\u001b[1;33m\u001b[0m\u001b[1;33m\u001b[0m\u001b[0m\n\u001b[0;32m      4\u001b[0m \u001b[0mx_train_sc\u001b[0m\u001b[1;33m=\u001b[0m\u001b[0mscale\u001b[0m\u001b[1;33m(\u001b[0m\u001b[0mX_train\u001b[0m\u001b[1;33m.\u001b[0m\u001b[0mastype\u001b[0m\u001b[1;33m(\u001b[0m\u001b[0mnp\u001b[0m\u001b[1;33m.\u001b[0m\u001b[0mfloat64\u001b[0m\u001b[1;33m)\u001b[0m\u001b[1;33m)\u001b[0m\u001b[1;33m\u001b[0m\u001b[1;33m\u001b[0m\u001b[0m\n\u001b[0;32m      5\u001b[0m \u001b[0mx_test_sc\u001b[0m\u001b[1;33m=\u001b[0m\u001b[0mscale\u001b[0m\u001b[1;33m(\u001b[0m\u001b[0mX_test\u001b[0m\u001b[1;33m.\u001b[0m\u001b[0mastype\u001b[0m\u001b[1;33m(\u001b[0m\u001b[0mnp\u001b[0m\u001b[1;33m.\u001b[0m\u001b[0mfloat64\u001b[0m\u001b[1;33m)\u001b[0m\u001b[1;33m)\u001b[0m\u001b[1;33m\u001b[0m\u001b[1;33m\u001b[0m\u001b[0m\n",
+      "\u001b[1;31mNameError\u001b[0m: name 'util_mnist_reader' is not defined"
+     ]
+    }
+   ],
+   "source": [
+    "X_train,y_train=util_mnist_reader.load_mnist('data/fashion',kind='train')\n",
+    "X_test,y_test=util_mnist_reader.load_mnist('data/fashion',kind='t10k')\n",
+    "x_train_sc=scale(X_train.astype(np.float64))\n",
+    "x_test_sc=scale(X_test.astype(np.float64))\n",
+    "x_valid,x_test,y_valid,y_test=train_test_split(x_test_sc,y_test, test_size=0.5, random_state=1)\n",
+    "neural=onelayerneuralnetwork(no_features=785,no_class=10,no_hidden_units=80,epochs=200,learning_rate=0.001,no_batches=1000).fit(x_train_sc,y_train,x_valid,y_valid);\n",
+    "loss_graph(neural)      \n",
+    "accuracy_graph(neural)\n",
+    "\n",
+    "y_t=neural.pred(x_test)\n",
+    "y_final=find_max_prob(y_t)\n",
+    "c_m2=confusion_matrix(y_test,y_final)#Accuracy for confusion matrix\n",
+    "test_acc=accuracy(c_m2)\n",
+    "print(\"Test Accuracy = % f\" %(test_acc))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Multi Layer Neural Network"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#importing libraries\n",
+    "import util_mnist_reader\n",
+    "from keras.models import Sequential\n",
+    "from keras.layers import Dense\n",
+    "from keras.utils import to_categorical\n",
+    "from keras import optimizers\n",
+    "import matplotlib.pyplot as plt\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "import numpy as np"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "X_train, y_train = util_mnist_reader.load_mnist('/content/drive/My Drive', kind='train')\n",
+    "X_test, y_test = util_mnist_reader.load_mnist('/content/drive/My Drive', kind='t10k')\n",
+    "x_val, x_test, y_val, y_test = train_test_split(X_test, y_test, test_size=0.50, random_state=1)\n",
+    "y_train=to_categorical(y_train, num_classes=10)\n",
+    "y_test=to_categorical(y_test, num_classes=10)\n",
+    "y_val=to_categorical(y_val, num_classes=10)\n",
+    "x_train_scaled = X_train / 255\n",
+    "x_test_scaled = x_test / 255\n",
+    "x_valid_scaled = x_val / 255"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "model=Sequential()\n",
+    "model.add(Dense(units=64, activation='sigmoid', input_dim=784))\n",
+    "model.add(Dense(units=64, activation='sigmoid'))\n",
+    "model.add(Dense(units=64, activation='sigmoid'))\n",
+    "model.add(Dense(units=10, activation='softmax'))\n",
+    "sgd = optimizers.SGD(lr=0.001, momentum=0.9)\n",
+    "model.compile(loss='categorical_crossentropy',optimizer=sgd,metrics=['accuracy'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "a=model.fit(x_train_scaled, y_train, validation_data=(x_valid_scaled,y_val), epochs=200)\n",
+    "classes = model.evaluate(x_test_scaled,y_test)\n",
+    "print(\"Test Loss , Test Accuracy \" )\n",
+    "print(classes)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "plt.plot(a.history['acc'])\n",
+    "plt.plot(a.history['val_acc'])\n",
+    "plt.title('Model accuracy')\n",
+    "plt.ylabel('Accuracy')\n",
+    "plt.xlabel('Epoch')\n",
+    "plt.legend(['Train', 'Valid'], loc='upper left')\n",
+    "plt.show()\n",
+    "\n",
+    "plt.plot(a.history['loss'])\n",
+    "plt.plot(a.history['val_loss'])\n",
+    "plt.title('Model loss')\n",
+    "plt.ylabel('Loss')\n",
+    "plt.xlabel('Epoch')\n",
+    "plt.legend(['Train', 'Valid'], loc='upper left')\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Convolution Neural Network"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import util_mnist_reader\n",
+    "import matplotlib.pyplot as plt\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.metrics import confusion_matrix\n",
+    "from keras.models import Sequential\n",
+    "from keras.layers import Dense, Conv2D, MaxPool2D, MaxPool2D, Flatten\n",
+    "from keras.utils import to_categorical\n",
+    "from keras import optimizers"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "X_train, y_train = util_mnist_reader.load_mnist('/content/drive/My Drive', kind='train')\n",
+    "X_test, y_test = util_mnist_reader.load_mnist('/content/drive/My Drive', kind='t10k')\n",
+    "x_val,x_test,y_val,y_test=train_test_split(X_test,y_test,test_size=0.5,random_state=1)\n",
+    "print(X_train.shape, y_train.shape, x_test.shape,y_test.shape,x_val.shape,y_val.shape)\n",
+    "\n",
+    "x_train=X_train/255\n",
+    "x_val=x_val/255\n",
+    "x_test=x_test/255\n",
+    "\n",
+    "y_train=to_categorical(y_train)\n",
+    "y_val=to_categorical(y_val)\n",
+    "y_test=to_categorical(y_test)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "x_train=x_train.reshape((60000,28,28,1))\n",
+    "x_val=x_val.reshape((5000,28,28,1))\n",
+    "x_test=x_test.reshape((5000,28,28,1))\n",
+    "model=Sequential()\n",
+    "model.add(Conv2D(28,(3,3), activation=\"relu\",input_shape=(28,28,1)))\n",
+    "model.add(MaxPool2D(2,2))\n",
+    "model.add(Conv2D(56,(3,3), activation=\"relu\"))\n",
+    "model.add(MaxPool2D(2,2))\n",
+    "model.add(Flatten())\n",
+    "model.add(Dense(units=56,activation=\"relu\"))\n",
+    "model.add(Dense(units=56,activation=\"relu\"))\n",
+    "model.add(Dense(units=10,activation=\"softmax\"))\n",
+    "sgd = optimizers.SGD(lr=0.001, decay=1e-6, momentum=0.9)\n",
+    "model.compile(loss='categorical_crossentropy',optimizer=sgd,metrics=['accuracy'])\n",
+    "a=model.fit(x_train,y_train,validation_data=(x_val,y_val),epochs=30)          "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "classes = model.evaluate(x_test,y_test)\n",
+    "print(\"Test Loss , Test Accuracy \" )\n",
+    "print(classes)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "plt.plot(a.history['acc'])\n",
+    "plt.plot(a.history['val_acc'])\n",
+    "plt.title('Model accuracy')\n",
+    "plt.ylabel('Accuracy')\n",
+    "plt.xlabel('Epoch')\n",
+    "plt.legend(['Train', 'Validation'], loc='upper left')\n",
+    "plt.show()\n",
+    "\n",
+    "# Plot training & validation loss values\n",
+    "plt.plot(a.history['loss'])\n",
+    "plt.plot(a.history['val_loss'])\n",
+    "plt.title('Model loss')\n",
+    "plt.ylabel('Loss')\n",
+    "plt.xlabel('Epoch')\n",
+    "plt.legend(['Train', 'Validation'], loc='upper left')\n",
+    "plt.show()"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
